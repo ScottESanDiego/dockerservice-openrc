@@ -1,13 +1,13 @@
 #!/sbin/openrc-run
 
-: ${SUBCFGDIR:=/root/docker}
+: ${SUBCFGDIR:=/etc/docker-compose}
 DOCKER_COMPOSE_UP_ARGS=${DOCKER_COMPOSE_UP_ARGS-"--no-build --no-recreate --no-deps"}
 
 SUBSVC="${SVCNAME#*.}"
 [ -z "${SUBSVC}" ] && exit 1
-: ${SUBCFG:="${SUBCFGDIR}/${SUBSVC}/docker-compose.yml"}
+: ${SUBCFG:="${SUBCFGDIR}/${SUBSVC}.yml"}
 DOCOCMD="/usr/bin/docker-compose"
-export COMPOSE_HTTP_TIMEOUT=300
+export COMPOSE_HTTP_TIMEOUT=30
 
 depend() {
   need localmount net docker
@@ -31,18 +31,20 @@ configtest() {
 start() {
   configtest || return 1
   ebegin "Starting dockerservice ${SUBSVC}"
-  "${DOCOCMD}" -f "${SUBCFG}" up -d ${DOCKER_COMPOSE_UP_ARGS}
+  "${DOCOCMD}" -f "${SUBCFG}" -p "${SUBSVC}" pull
+  "${DOCOCMD}" -f "${SUBCFG}" -p "${SUBSVC}" up -d ${DOCKER_COMPOSE_UP_ARGS}
   eend $?
 }
 
 stop() {
   ebegin "Stopping dockerservice ${SUBSVC}"
-  "${DOCOCMD}" -f "${SUBCFG}" stop --timeout=300
+  "${DOCOCMD}" -f "${SUBCFG}" -p "${SUBSVC}" stop --timeout=30
+  "${DOCOCMD}" -f "${SUBCFG}" -p "${SUBSVC}" rm -f -v
   eend $?
 }
 
 status() {
-  if [ "$("${DOCOCMD}" -f "${SUBCFG}" top | wc -l)" -gt "0" ]; then
+  if [ "$("${DOCOCMD}" -f "${SUBCFG}" -p "${SUBSVC}" top | wc -l)" -gt "0" ]; then
     einfo "status: started"
   else
     einfo "status: stopped"
