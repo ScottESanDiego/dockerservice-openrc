@@ -38,8 +38,7 @@ start() {
 
 stop() {
   ebegin "Stopping dockerservice ${SUBSVC}"
-  "${DOCOCMD}" -f "${SUBCFG}" -p "${SUBSVC}" stop --timeout=30
-  "${DOCOCMD}" -f "${SUBCFG}" -p "${SUBSVC}" rm -f -v
+  "${DOCOCMD}" -f "${SUBCFG}" -p "${SUBSVC}" down -v --remove-orphans --timeout=30
   eend $?
 }
 
