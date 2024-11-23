@@ -6,7 +6,7 @@ DOCKER_COMPOSE_UP_ARGS=${DOCKER_COMPOSE_UP_ARGS-"--no-build --no-recreate --no-d
 SUBSVC="${SVCNAME#*.}"
 [ -z "${SUBSVC}" ] && exit 1
 : ${SUBCFG:="${SUBCFGDIR}/${SUBSVC}.yml"}
-DOCOCMD="/usr/bin/docker-compose"
+DOCOCMD="/usr/bin/docker"
 export COMPOSE_HTTP_TIMEOUT=30
 
 depend() {
@@ -20,7 +20,7 @@ configtest() {
     eerror "The config file ${SUBCFG} does not exist!"
     return 1
   fi
-  if "${DOCOCMD}" -f "${SUBCFG}" config >&/dev/null; then
+  if "${DOCOCMD}" compose -f "${SUBCFG}" config >&/dev/null; then
     einfo "config: ok"
   else
     eerror "config: error"
@@ -31,19 +31,19 @@ configtest() {
 start() {
   configtest || return 1
   ebegin "Starting dockerservice ${SUBSVC}"
-  "${DOCOCMD}" -f "${SUBCFG}" -p "${SUBSVC}" pull
-  "${DOCOCMD}" -f "${SUBCFG}" -p "${SUBSVC}" up -d ${DOCKER_COMPOSE_UP_ARGS}
+  "${DOCOCMD}" compose -f "${SUBCFG}" -p "${SUBSVC}" pull
+  "${DOCOCMD}" compose -f "${SUBCFG}" -p "${SUBSVC}" up -d ${DOCKER_COMPOSE_UP_ARGS}
   eend $?
 }
 
 stop() {
   ebegin "Stopping dockerservice ${SUBSVC}"
-  "${DOCOCMD}" -f "${SUBCFG}" -p "${SUBSVC}" down -v --remove-orphans --timeout=30
+  "${DOCOCMD}" compose -f "${SUBCFG}" -p "${SUBSVC}" down -v --remove-orphans --timeout=30
   eend $?
 }
 
 status() {
-  if [ "$("${DOCOCMD}" -f "${SUBCFG}" -p "${SUBSVC}" top | wc -l)" -gt "0" ]; then
+  if [ "$("${DOCOCMD}" compose -f "${SUBCFG}" -p "${SUBSVC}" top | wc -l)" -gt "0" ]; then
     einfo "status: started"
   else
     einfo "status: stopped"
