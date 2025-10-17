@@ -2,6 +2,10 @@
 
 : ${SUBCFGDIR:=/etc/docker-compose}
 DOCKER_COMPOSE_UP_ARGS=${DOCKER_COMPOSE_UP_ARGS-"--no-build --no-recreate --no-deps"}
+: ${DOCKER_PULL_ENABLED:=yes}
+: ${DOCKER_PULL_TIMEOUT:=60}
+: ${DOCKER_START_RETRIES:=3}
+: ${DOCKER_START_RETRY_DELAY:=5}
 
 SUBSVC="${SVCNAME#*.}"
 [ -z "${SUBSVC}" ] && exit 1
@@ -10,8 +14,8 @@ DOCOCMD="/usr/bin/docker"
 export COMPOSE_HTTP_TIMEOUT=30
 
 depend() {
-  need localmount net docker
-  use dns
+  need localmount docker
+  use net dns
   after docker
 }
 
@@ -20,7 +24,7 @@ configtest() {
     eerror "The config file ${SUBCFG} does not exist!"
     return 1
   fi
-  if "${DOCOCMD}" compose -f "${SUBCFG}" config >&/dev/null; then
+  if "${DOCOCMD}" compose -f "${SUBCFG}" config >/dev/null 2>&1; then
     einfo "config: ok"
   else
     eerror "config: error"
@@ -31,9 +35,37 @@ configtest() {
 start() {
   configtest || return 1
   ebegin "Starting dockerservice ${SUBSVC}"
-  "${DOCOCMD}" compose -f "${SUBCFG}" -p "${SUBSVC}" pull
-  "${DOCOCMD}" compose -f "${SUBCFG}" -p "${SUBSVC}" up -d ${DOCKER_COMPOSE_UP_ARGS}
-  eend $?
+  
+  # Attempt to pull images if enabled and network is available
+  if yesno "${DOCKER_PULL_ENABLED}"; then
+    einfo "Attempting to pull latest images..."
+    if timeout "${DOCKER_PULL_TIMEOUT}" "${DOCOCMD}" compose -f "${SUBCFG}" -p "${SUBSVC}" pull >/dev/null 2>&1; then
+      einfo "Images pulled successfully"
+    else
+      ewarn "Failed to pull images (network/internet may be unavailable), continuing with local images"
+    fi
+  else
+    einfo "Image pulling disabled, using local images"
+  fi
+  
+  # Start services with retry logic
+  local retries=0
+  while [ ${retries} -lt "${DOCKER_START_RETRIES}" ]; do
+    if "${DOCOCMD}" compose -f "${SUBCFG}" -p "${SUBSVC}" up -d ${DOCKER_COMPOSE_UP_ARGS}; then
+      eend 0
+      return 0
+    else
+      retries=$((retries + 1))
+      if [ ${retries} -lt "${DOCKER_START_RETRIES}" ]; then
+        ewarn "Start attempt ${retries} failed, retrying in ${DOCKER_START_RETRY_DELAY} seconds..."
+        sleep "${DOCKER_START_RETRY_DELAY}"
+      fi
+    fi
+  done
+  
+  eerror "Failed to start after ${DOCKER_START_RETRIES} attempts"
+  eend 1
+  return 1
 }
 
 stop() {
@@ -43,7 +75,8 @@ stop() {
 }
 
 status() {
-  if [ "$("${DOCOCMD}" compose -f "${SUBCFG}" -p "${SUBSVC}" top | wc -l)" -gt "0" ]; then
+  if "${DOCOCMD}" compose -f "${SUBCFG}" -p "${SUBSVC}" ps -q >/dev/null 2>&1 && \
+     [ "$("${DOCOCMD}" compose -f "${SUBCFG}" -p "${SUBSVC}" ps -q | wc -l)" -gt "0" ]; then
     einfo "status: started"
   else
     einfo "status: stopped"
