@@ -39,7 +39,7 @@ start() {
   # Attempt to pull images if enabled and network is available
   if yesno "${DOCKER_PULL_ENABLED}"; then
     einfo "Attempting to pull latest images..."
-    if timeout "${DOCKER_PULL_TIMEOUT}" "${DOCOCMD}" compose -f "${SUBCFG}" -p "${SUBSVC}" pull >/dev/null 2>&1; then
+    if timeout "${DOCKER_PULL_TIMEOUT}" "${DOCOCMD}" compose -f "${SUBCFG}" -p "${SUBSVC}" pull; then
       einfo "Images pulled successfully"
     else
       ewarn "Failed to pull images (network/internet may be unavailable), continuing with local images"
